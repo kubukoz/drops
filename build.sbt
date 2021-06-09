@@ -15,7 +15,7 @@ inThisBuild(
 )
 
 (ThisBuild / scalaVersion) := "2.12.14"
-(ThisBuild / crossScalaVersions) := Seq("2.12.14", "2.13.13")
+(ThisBuild / crossScalaVersions) := Seq("2.12.14", "2.13.6")
 
 val GraalVM11 = "graalvm-ce-java11@20.3.0"
 ThisBuild / githubWorkflowJavaVersions := Seq(GraalVM11)
@@ -55,7 +55,7 @@ val core = project
   .settings(
     commonSettings,
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-core" % "1.6.1"
+      "org.typelevel" %% "cats-core" % "2.6.1"
     ),
   )
 

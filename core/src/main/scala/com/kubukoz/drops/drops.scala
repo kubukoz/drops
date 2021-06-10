@@ -1,9 +1,12 @@
 package com.kubukoz
 
-import cats.kernel.Semigroup
+import cats.ContravariantMonoidal
+import cats.SemigroupK
 import cats.Show
-import cats.implicits._
 import cats.data.NonEmptyList
+import cats.implicits._
+import cats.kernel.Eq
+import cats.kernel.Semigroup
 
 object drops {
 
@@ -17,11 +20,13 @@ object drops {
       a => drawTable(NonEmptyList.one(a))(schema).mkString("\n")
   }
 
-  trait Schema[A] {
+  trait Schema[-A] {
     def headers: List[String]
     def cells(a: A): List[String]
 
-    def render: Render[A] = Render.nested(this)
+    def render[B <: A]: Render[B] = Render.nested(this)
+
+    def prepare[B](f: B => A): Schema[B] = Schema.instance(headers, b => cells(f(b)))
     def provide(a: A): Schema[Any] = Schema.instance(headers, _ => cells(a))
   }
 
@@ -37,14 +42,27 @@ object drops {
       }
     }
 
-    def make[A](mk: Column[A] => Schema[A]): Schema[A] = mk(new Column[A])
+    def make[A](mk: Column[A] => Schema[A]): Schema[A] = mk(new Column[A](dummy = false))
 
-    implicit def semigroup[A]: Semigroup[Schema[A]] =
-      (a, b) =>
-        instance(
-          a.headers ++ b.headers,
-          s => a.cells(s) ++ b.cells(s),
-        )
+    implicit def semigroup[A]: Semigroup[Schema[A]] = semigroupK.algebra[A]
+
+    implicit val semigroupK: SemigroupK[Schema] = new SemigroupK[Schema] {
+      def combineK[A](x: Schema[A], y: Schema[A]): Schema[A] = (x, y).contramapN(a => (a, a))
+    }
+
+    def empty: Schema[Any] = instance(Nil, _ => Nil)
+
+    implicit val contravariantMonoidal: ContravariantMonoidal[Schema] = new ContravariantMonoidal[Schema] {
+      def product[A, B](fa: Schema[A], fb: Schema[B]): Schema[(A, B)] =
+        Schema.instance(fa.headers ++ fb.headers, { case (a, b) => fa.cells(a) ++ fb.cells(b) })
+
+      def contramap[A, B](fa: Schema[A])(f: B => A): Schema[B] = fa.prepare(f)
+
+      val unit: Schema[Unit] = Schema.empty
+    }
+
+    implicit def eq[A](implicit eqv: Eq[A => List[String]]): Eq[Schema[A]] =
+      Eq.by(schema => (schema.headers, schema.cells _))
 
     def single[A](label: String)(value: A)(render: Render[A]): Schema[Unit] = {
       val rendered = List(render.render(value))
@@ -57,7 +75,7 @@ object drops {
 
   }
 
-  final class Column[A] private[drops] () {
+  final class Column[A] private[drops] (private val dummy: Boolean) extends AnyVal {
 
     def apply[B](label: String)(f: A => B)(render: Render[B]): Schema[A] =
       Schema.instance(

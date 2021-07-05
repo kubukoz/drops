@@ -15,7 +15,7 @@ inThisBuild(
 )
 
 (ThisBuild / scalaVersion) := "2.12.14"
-(ThisBuild / crossScalaVersions) := Seq("2.12.14", "2.13.6")
+(ThisBuild / crossScalaVersions) := Seq("2.12.14", "2.13.6", "3.0.0")
 
 val GraalVM11 = "graalvm-ce-java11@20.3.0"
 ThisBuild / githubWorkflowJavaVersions := Seq(GraalVM11)
@@ -39,11 +39,15 @@ ThisBuild / githubWorkflowEnv ++= List(
 
 def crossPlugin(x: sbt.librarymanagement.ModuleID) = compilerPlugin(x.cross(CrossVersion.full))
 
-val addCompilerPlugins = libraryDependencies ++=
-  List(
-    crossPlugin("org.typelevel" % "kind-projector" % "0.13.0"),
-    crossPlugin("com.kubukoz" % "better-tostring" % "0.3.3"),
-  )
+val addCompilerPlugins = libraryDependencies ++= List(
+  crossPlugin("com.kubukoz" % "better-tostring" % "0.3.3")
+) ++ {
+  if (scalaVersion.value.startsWith("3")) Nil
+  else
+    List(
+      crossPlugin("org.typelevel" % "kind-projector" % "0.13.0")
+    )
+}
 
 val commonSettings = Seq(
   scalacOptions -= "-Xfatal-warnings",

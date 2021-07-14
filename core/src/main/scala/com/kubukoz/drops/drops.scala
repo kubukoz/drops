@@ -1,12 +1,12 @@
 package com.kubukoz
 
-import cats.ContravariantMonoidal
 import cats.SemigroupK
 import cats.Show
 import cats.data.NonEmptyList
 import cats.implicits._
 import cats.kernel.Eq
 import cats.kernel.Semigroup
+import cats.ContravariantSemigroupal
 
 object drops {
 
@@ -50,15 +50,11 @@ object drops {
       def combineK[A](x: Schema[A], y: Schema[A]): Schema[A] = (x, y).contramapN(a => (a, a))
     }
 
-    def empty: Schema[Any] = instance(Nil, _ => Nil)
-
-    implicit val contravariantMonoidal: ContravariantMonoidal[Schema] = new ContravariantMonoidal[Schema] {
+    implicit val contravariantSemigroupal: ContravariantSemigroupal[Schema] = new ContravariantSemigroupal[Schema] {
       def product[A, B](fa: Schema[A], fb: Schema[B]): Schema[(A, B)] =
         Schema.instance(fa.headers ++ fb.headers, { case (a, b) => fa.cells(a) ++ fb.cells(b) })
 
       def contramap[A, B](fa: Schema[A])(f: B => A): Schema[B] = fa.prepare(f)
-
-      val unit: Schema[Unit] = Schema.empty
     }
 
     implicit def eq[A](implicit eqv: Eq[A => List[String]]): Eq[Schema[A]] =
@@ -96,7 +92,8 @@ object drops {
         (header :: valuesAtHeader)
           .flatMap(_.linesIterator)
           .map(cleanupColorCodes(_).length)
-          .max
+          .maximumOption
+          .getOrElse(0)
       }
 
     renderLines(
@@ -129,14 +126,16 @@ object drops {
       .map(renderLine)
   }
 
+  import implicits._
+
   private def renderLine(columns: List[List[FlatString]]): String =
     columns
       .transpose
-      .map(_.map(_.value).mkString(" | ", " | ", " | "))
+      .map(_.map(_.value.surround(" ")).mkString("|", "|", "|"))
       .mkString("\n")
 
   private def padHeights(values: List[String]): List[List[FlatString]] = {
-    val maxHeight = values.map(_.linesIterator.length).max
+    val maxHeight = values.map(_.linesIterator.length).maximumOption.getOrElse(0)
     values.map { value =>
       value
         .linesIterator
@@ -148,4 +147,13 @@ object drops {
 
   //no-newline string
   private final case class FlatString(value: String) extends AnyVal
+
+  object implicits {
+
+    private[drops] final implicit class DropsStringOps(private val s: String) extends AnyVal {
+      def surround(wrap: String): String = wrap + s + wrap
+    }
+
+  }
+
 }

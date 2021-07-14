@@ -59,7 +59,9 @@ val core = project
   .settings(
     commonSettings,
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-core" % "2.6.1"
+      "org.typelevel" %% "cats-core" % "2.6.1",
+      "org.scalameta" %% "munit" % "0.7.27" % Test,
+      "com.davegurnell" %% "unindent" % "1.7.0" % Test,
     ),
   )
 

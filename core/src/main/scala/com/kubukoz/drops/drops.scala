@@ -99,12 +99,14 @@ private object utils {
   def toTable[A](schema: Schema[A]): (List[String], A => List[String]) = schema match {
     case Table(headers, cells)   => (headers, cells)
     case c: Contramap[a, b]      =>
-      toTable(c.underlying).map(_.compose(c.f))
+      toTable(c.underlying).fmap(_.compose(c.f))
     case p: Schema.Product[l, r] =>
       val (leftHeaders, leftValues) = toTable(p.lhs)
       val (rightHeaders, rightValues) = toTable(p.rhs)
 
-      (leftHeaders ++ rightHeaders, { case (a, b) => leftValues(a) ++ rightValues(b) })
+      //inlining this causes a warning on 2.13
+      val f: ((l, r)) => List[String] = { case (a, b) => leftValues(a) ++ rightValues(b) }
+      (leftHeaders ++ rightHeaders, f)
   }
 
   def renderLines(

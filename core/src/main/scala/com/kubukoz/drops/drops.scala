@@ -6,8 +6,10 @@ import cats.Show
 import cats.data.NonEmptyList
 import cats.implicits._
 import cats.kernel.Semigroup
-import com.kubukoz.drops.Schema.Contramap
-import com.kubukoz.drops.Schema.Table
+import cats.data.Tuple2K
+import cats.data.Const
+import cats.ContravariantMonoidal
+import cats.arrow.FunctionK
 
 trait Render[A] {
   def render(a: A): String
@@ -25,12 +27,13 @@ sealed trait Schema[-A] {
   def draw[B <: A](values: NonEmptyList[B]): String = Schema.drawTable(values)(this).mkString("\n")
   def prepare[B](f: B => A): Schema[B] = Schema.Contramap(this, f)
   def provide(a: A): Schema[Any] = prepare(_ => a)
+
 }
 
 object Schema {
-  final case class Table[A](headers: List[String], cells: A => List[String]) extends Schema[A]
-  final case class Contramap[A, B](underlying: Schema[A], f: B => A) extends Schema[B]
-  final case class Product[A, B](lhs: Schema[A], rhs: Schema[B]) extends Schema[(A, B)]
+  final private[drops] case class Table[A](headers: List[String], cells: A => List[String]) extends Schema[A]
+  final private[drops] case class Contramap[A, B](underlying: Schema[A], f: B => A) extends Schema[B]
+  final private[drops] case class Product[A, B](lhs: Schema[A], rhs: Schema[B]) extends Schema[(A, B)]
 
   def instance[A](headers: List[String], cells: A => List[String]): Schema[A] = Table(headers, cells)
 
@@ -45,9 +48,28 @@ object Schema {
   implicit val contravariantSemigroupal: ContravariantSemigroupal[Schema] = new ContravariantSemigroupal[Schema] {
     def product[A, B](fa: Schema[A], fb: Schema[B]): Schema[(A, B)] =
       Product(fa, fb)
-    //Schema.instance(fa.headers ++ fb.headers, { case (a, b) => fa.cells(a) ++ fb.cells(b) })
 
     def contramap[A, B](fa: Schema[A])(f: B => A): Schema[B] = fa.prepare(f)
+  }
+
+  //forall A . Schema[A] => B[A]
+  trait Fold[B[_]] {
+    def table[a](headers: List[String], cells: a => List[String]): B[a]
+    def contramap[a, b](underlying: B[a], f: b => a): B[b]
+    def product[a, b](lhs: B[a], rhs: B[b]): B[(a, b)]
+
+    def runFold[A](schema: Schema[A])(implicit F: ContravariantSemigroupal[B]): B[A] = schema match {
+      case Table(headers, cells) => table(headers, cells)
+      case c: Contramap[a, b]    => runFold(c.underlying).contramap(c.f)
+      case p: Product[a, b]      =>
+        val x = runFold(p.lhs)
+        val y = runFold(p.rhs)
+        (x, y)
+          .tupled
+          //poor man's `narrow`
+          .contramap(a => a: A)
+    }
+
   }
 
   //probably going to have to eq by rendering
@@ -96,15 +118,43 @@ private object utils {
   def cleanupColorCodes(s: String): String =
     s.replaceAll("\u001B\\[[;\\d]*m", "")
 
-  def toTable[A](schema: Schema[A]): (List[String], A => List[String]) = schema match {
-    case Table(headers, cells)   => (headers, cells)
-    case c: Contramap[a, b]      =>
-      toTable(c.underlying).map(_.compose(c.f))
-    case p: Schema.Product[l, r] =>
-      val (leftHeaders, leftValues) = toTable(p.lhs)
-      val (rightHeaders, rightValues) = toTable(p.rhs)
+  import Schema.Fold
 
-      (leftHeaders ++ rightHeaders, { case (a, b) => leftValues(a) ++ rightValues(b) })
+  val toTableFold: Fold[Tuple2K[Const[List[String], *], * => List[String], *]] =
+    new Fold[Tuple2K[Const[List[String], *], * => List[String], *]] {
+      def table[a](headers: List[String], cells: a => List[String]): Tuple2K[Const[List[String], *], * => List[String], a] =
+        Tuple2K[Const[List[String], *], * => List[String], a](Const(headers), cells)
+
+      def contramap[a, b](
+        underlying: Tuple2K[Const[List[String], *], * => List[String], a],
+        f: b => a,
+      ): Tuple2K[Const[List[String], *], * => List[String], b] = {
+
+        val (l, r) = (underlying.first, underlying.second)
+        Tuple2K[Const[List[String], *], * => List[String], b](l.retag, r.compose(f))
+      }
+
+      def product[a, b](
+        lhs: Tuple2K[Const[List[String], *], * => List[String], a],
+        rhs: Tuple2K[Const[List[String], *], * => List[String], b],
+      ): Tuple2K[Const[List[String], *], * => List[String], (a, b)] = {
+        val (leftHeaders, leftValues) = (lhs.first, lhs.second)
+        val (rightHeaders, rightValues) = (rhs.first, rhs.second)
+
+        Tuple2K[Const[List[String], *], * => List[String], (a, b)](
+          (leftHeaders *> rightHeaders).retag,
+          { case (a, b) => leftValues(a) ++ rightValues(b) },
+        )
+      }
+
+    }
+
+  def toTable[A](schema: Schema[A]): (List[String], A => List[String]) = {
+    val t = toTableFold.runFold(schema)(
+      Tuple2K.catsDataContravariantMonoidalForTuple2k[Const[List[String], *], * => List[String]]
+    )
+
+    (t.first.getConst, t.second)
   }
 
   def renderLines(

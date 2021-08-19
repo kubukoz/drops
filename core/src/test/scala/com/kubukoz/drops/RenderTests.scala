@@ -111,4 +111,24 @@ class RenderTests extends FunSuite {
         | | ==== | === | ========== | | | ========= | ==== | ========== | |
         | =========================== | ================================= |""",
   )
+
+  test("Max width") {
+    assertEquals(
+      Schema
+        .table[Person] { col =>
+          // should config be a column parameter?
+          col("name")(_.name)(Render.fromShow[String].configure(Render.Config(maxWidth = Some("Very long name".length)))) |+|
+            col("age")(_.age)(Render.fromShow) |+|
+            col("programmer")(_.programmer)(Render.fromShow)
+        }
+        .render
+        .render(Person("Very long nameof a person", 10, true)),
+      i"""| ============== | === | ========== |
+          | name           | age | programmer |
+          | ============== | === | ========== |
+          | Very long name | 10  | true       |
+          | of a person    |     |            |
+          | ============== | === | ========== |""",
+    )
+  }
 }

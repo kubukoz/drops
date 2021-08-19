@@ -11,9 +11,22 @@ import com.kubukoz.drops.Schema.Table
 
 trait Render[A] {
   def render(a: A): String
+
+  def configure(config: Render.Config): Render[A] = a =>
+    config.maxWidth match {
+      case Some(ml) => render(a).sliding(ml, ml).mkString("\n")
+      case None     => render(a)
+    }
+
 }
 
 object Render {
+  final case class Config(maxWidth: Option[Int])
+
+  object Config {
+    val default: Config = Config(None)
+  }
+
   def fromShow[A: Show]: Render[A] = _.show
   def nested[A](schema: Schema[A]): Render[A] =
     a => Schema.drawTable(NonEmptyList.one(a))(schema).mkString("\n")

@@ -1,3 +1,5 @@
+Global / onChangedBuildSource := ReloadOnSourceChanges
+
 inThisBuild(
   List(
     organization := "com.kubukoz",
@@ -14,11 +16,9 @@ inThisBuild(
   )
 )
 
-(ThisBuild / scalaVersion) := "2.12.14"
-(ThisBuild / crossScalaVersions) := Seq("2.12.14", "2.13.6", "3.0.0")
+ThisBuild / scalaVersion := "2.12.17"
+(ThisBuild / crossScalaVersions) := Seq("2.12.17", "2.13.9", "3.2.0")
 
-val GraalVM11 = "graalvm-ce-java11@20.3.0"
-ThisBuild / githubWorkflowJavaVersions := Seq(GraalVM11)
 ThisBuild / githubWorkflowTargetTags := Seq("v*")
 ThisBuild / githubWorkflowPublishTargetBranches := List(RefPredicate.StartsWith(Ref.Tag("v")), RefPredicate.Equals(Ref.Branch("main")))
 
@@ -40,12 +40,12 @@ ThisBuild / githubWorkflowEnv ++= List(
 def crossPlugin(x: sbt.librarymanagement.ModuleID) = compilerPlugin(x.cross(CrossVersion.full))
 
 val addCompilerPlugins = libraryDependencies ++= List(
-  crossPlugin("com.kubukoz" % "better-tostring" % "0.3.3")
+  crossPlugin("org.polyvariant" % "better-tostring" % "0.3.17")
 ) ++ {
   if (scalaVersion.value.startsWith("3")) Nil
   else
     List(
-      crossPlugin("org.typelevel" % "kind-projector" % "0.13.0")
+      crossPlugin("org.typelevel" % "kind-projector" % "0.13.2")
     )
 }
 
@@ -54,19 +54,19 @@ val commonSettings = Seq(
   addCompilerPlugins,
 )
 
-val core = project
+val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
   .settings(name := "drops-core")
   .settings(
     commonSettings,
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-core" % "2.6.1",
-      "org.scalameta" %% "munit" % "0.7.27" % Test,
-      "com.davegurnell" %% "unindent" % "1.7.0" % Test,
+      "org.typelevel" %%% "cats-core" % "2.8.0",
+      "org.scalameta" %%% "munit" % "1.0.0-M6" % Test,
     ),
   )
 
 val root =
   project
     .in(file("."))
-    .aggregate(core)
+    .aggregate(core.componentProjects.map(_.project): _*)
     .settings(publish := false)

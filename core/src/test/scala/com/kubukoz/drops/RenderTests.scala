@@ -3,7 +3,6 @@ package com.kubukoz.drops
 import cats.data.NonEmptyList
 import cats.implicits._
 import munit.FunSuite
-import unindent._
 
 class RenderTests extends FunSuite {
   def renderTest[A](name: String)(schema: Schema[A], value: A, expected: String) =
@@ -12,21 +11,20 @@ class RenderTests extends FunSuite {
   renderTest("Single column")(
     Schema.single("hello")(42)(Render.fromShow),
     (),
-    i"""| ===== |
-          | hello |
-          | ===== |
-          | 42    |
-          | ===== |""",
+    """>| ===== |
+       >| hello |
+       >| ===== |
+       >| 42    |
+       >| ===== |""".stripMargin('>'),
   )
-
   renderTest("Single column: value is longer")(
     Schema.single("name")("value")(Render.fromShow),
     (),
-    i"""| ===== |
-        | name  |
-        | ===== |
-        | value |
-        | ===== |""",
+    s""">| ===== |
+        >| name  |
+        >| ===== |
+        >| value |
+        >| ===== |""".stripMargin('>'),
   )
 
   case class Person(name: String, age: Int, programmer: Boolean)
@@ -44,11 +42,11 @@ class RenderTests extends FunSuite {
   renderTest("Multiple columns")(
     Person.schema,
     Person("Jane", 23, true),
-    i"""| ==== | === | ========== |
-        | name | age | programmer |
-        | ==== | === | ========== |
-        | Jane | 23  | true       |
-        | ==== | === | ========== |""",
+    s""">| ==== | === | ========== |
+        >| name | age | programmer |
+        >| ==== | === | ========== |
+        >| Jane | 23  | true       |
+        >| ==== | === | ========== |""".stripMargin('>'),
   )
 
   val jane = Person("Jane", 23, true)
@@ -64,24 +62,24 @@ class RenderTests extends FunSuite {
           )
         )(Person.schema)
         .mkString("\n"),
-      i"""| ========= | ==== | ========== |
-          | name      | age  | programmer |
-          | ========= | ==== | ========== |
-          | Jane      | 23   | true       |
-          | Anonymous | 1337 | false      |
-          | ========= | ==== | ========== |""",
+      s""">| ========= | ==== | ========== |
+          >| name      | age  | programmer |
+          >| ========= | ==== | ========== |
+          >| Jane      | 23   | true       |
+          >| Anonymous | 1337 | false      |
+          >| ========= | ==== | ========== |""".stripMargin('>'),
     )
   }
 
   renderTest("Multi-line cell")(
     Person.schema,
     Person("Joe\nDoe", 30, true),
-    i"""| ==== | === | ========== |
-        | name | age | programmer |
-        | ==== | === | ========== |
-        | Joe  | 30  | true       |
-        | Doe  |     |            |
-        | ==== | === | ========== |""",
+    s""">| ==== | === | ========== |
+        >| name | age | programmer |
+        >| ==== | === | ========== |
+        >| Joe  | 30  | true       |
+        >| Doe  |     |            |
+        >| ==== | === | ========== |""".stripMargin('>'),
   )
 
   case class Friendship(of: Person, withPerson: Person)
@@ -101,14 +99,14 @@ class RenderTests extends FunSuite {
       jane,
       anon,
     ),
-    i"""| =========================== | ================================= |
-        | of                          | with person                       |
-        | =========================== | ================================= |
-        | | ==== | === | ========== | | | ========= | ==== | ========== | |
-        | | name | age | programmer | | | name      | age  | programmer | |
-        | | ==== | === | ========== | | | ========= | ==== | ========== | |
-        | | Jane | 23  | true       | | | Anonymous | 1337 | false      | |
-        | | ==== | === | ========== | | | ========= | ==== | ========== | |
-        | =========================== | ================================= |""",
+    s""">| =========================== | ================================= |
+        >| of                          | with person                       |
+        >| =========================== | ================================= |
+        >| | ==== | === | ========== | | | ========= | ==== | ========== | |
+        >| | name | age | programmer | | | name      | age  | programmer | |
+        >| | ==== | === | ========== | | | ========= | ==== | ========== | |
+        >| | Jane | 23  | true       | | | Anonymous | 1337 | false      | |
+        >| | ==== | === | ========== | | | ========= | ==== | ========== | |
+        >| =========================== | ================================= |""".stripMargin('>'),
   )
 }
